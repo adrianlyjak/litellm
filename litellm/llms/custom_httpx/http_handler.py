@@ -183,6 +183,7 @@ class AsyncHTTPHandler:
             follow_redirects if follow_redirects is not None else USE_CLIENT_DEFAULT
         )
 
+        # Is there a reason this doesn't use the standard error handling send method?
         response = await self.client.get(
             url, params=params, headers=headers, follow_redirects=_follow_redirects  # type: ignore
         )
@@ -200,62 +201,15 @@ class AsyncHTTPHandler:
         stream: bool = False,
         logging_obj: Optional[LiteLLMLoggingObject] = None,
     ):
-        start_time = time.time()
-        try:
-            if timeout is None:
-                timeout = self.timeout
+        
+        if timeout is None:
+            timeout = self.timeout
 
-            req = self.client.build_request(
-                "POST", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
-            )
-            response = await self.client.send(req, stream=stream)
-            response.raise_for_status()
-            return response
-        except (httpx.RemoteProtocolError, httpx.ConnectError):
-            # Retry the request with a new session if there is a connection error
-            new_client = self.create_client(
-                timeout=timeout, concurrent_limit=1, event_hooks=self.event_hooks
-            )
-            try:
-                return await self.single_connection_post_request(
-                    url=url,
-                    client=new_client,
-                    data=data,
-                    json=json,
-                    params=params,
-                    headers=headers,
-                    stream=stream,
-                )
-            finally:
-                await new_client.aclose()
-        except httpx.TimeoutException as e:
-            end_time = time.time()
-            time_delta = round(end_time - start_time, 3)
-            headers = {}
-            error_response = getattr(e, "response", None)
-            if error_response is not None:
-                for key, value in error_response.headers.items():
-                    headers["response_headers-{}".format(key)] = value
+        req = self.client.build_request(
+            "POST", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
+        )
+        return await self.send(req, stream, timeout_hint=timeout)
 
-            raise litellm.Timeout(
-                message=f"Connection timed out. Timeout passed={timeout}, time taken={time_delta} seconds",
-                model="default-model-name",
-                llm_provider="litellm-httpx-handler",
-                headers=headers,
-            )
-        except httpx.HTTPStatusError as e:
-            if stream is True:
-                setattr(e, "message", await e.response.aread())
-                setattr(e, "text", await e.response.aread())
-            else:
-                setattr(e, "message", mask_sensitive_info(e.response.text))
-                setattr(e, "text", mask_sensitive_info(e.response.text))
-
-            setattr(e, "status_code", e.response.status_code)
-
-            raise e
-        except Exception as e:
-            raise e
 
     async def put(
         self,
@@ -267,55 +221,14 @@ class AsyncHTTPHandler:
         timeout: Optional[Union[float, httpx.Timeout]] = None,
         stream: bool = False,
     ):
-        try:
-            if timeout is None:
-                timeout = self.timeout
+        if timeout is None:
+            timeout = self.timeout
 
-            req = self.client.build_request(
-                "PUT", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
-            )
-            response = await self.client.send(req)
-            response.raise_for_status()
-            return response
-        except (httpx.RemoteProtocolError, httpx.ConnectError):
-            # Retry the request with a new session if there is a connection error
-            new_client = self.create_client(
-                timeout=timeout, concurrent_limit=1, event_hooks=self.event_hooks
-            )
-            try:
-                return await self.single_connection_post_request(
-                    url=url,
-                    client=new_client,
-                    data=data,
-                    json=json,
-                    params=params,
-                    headers=headers,
-                    stream=stream,
-                )
-            finally:
-                await new_client.aclose()
-        except httpx.TimeoutException as e:
-            headers = {}
-            error_response = getattr(e, "response", None)
-            if error_response is not None:
-                for key, value in error_response.headers.items():
-                    headers["response_headers-{}".format(key)] = value
+        req = self.client.build_request(
+            "PUT", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
+        )
+        return await self.send(req, stream, timeout_hint=timeout)
 
-            raise litellm.Timeout(
-                message=f"Connection timed out after {timeout} seconds.",
-                model="default-model-name",
-                llm_provider="litellm-httpx-handler",
-                headers=headers,
-            )
-        except httpx.HTTPStatusError as e:
-            setattr(e, "status_code", e.response.status_code)
-            if stream is True:
-                setattr(e, "message", await e.response.aread())
-            else:
-                setattr(e, "message", e.response.text)
-            raise e
-        except Exception as e:
-            raise e
 
     async def patch(
         self,
@@ -327,55 +240,14 @@ class AsyncHTTPHandler:
         timeout: Optional[Union[float, httpx.Timeout]] = None,
         stream: bool = False,
     ):
-        try:
-            if timeout is None:
-                timeout = self.timeout
+        if timeout is None:
+            timeout = self.timeout
 
-            req = self.client.build_request(
-                "PATCH", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
-            )
-            response = await self.client.send(req)
-            response.raise_for_status()
-            return response
-        except (httpx.RemoteProtocolError, httpx.ConnectError):
-            # Retry the request with a new session if there is a connection error
-            new_client = self.create_client(
-                timeout=timeout, concurrent_limit=1, event_hooks=self.event_hooks
-            )
-            try:
-                return await self.single_connection_post_request(
-                    url=url,
-                    client=new_client,
-                    data=data,
-                    json=json,
-                    params=params,
-                    headers=headers,
-                    stream=stream,
-                )
-            finally:
-                await new_client.aclose()
-        except httpx.TimeoutException as e:
-            headers = {}
-            error_response = getattr(e, "response", None)
-            if error_response is not None:
-                for key, value in error_response.headers.items():
-                    headers["response_headers-{}".format(key)] = value
+        req = self.client.build_request(
+            "PATCH", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
+        )
+        return await self.send(req, stream, timeout_hint=timeout)
 
-            raise litellm.Timeout(
-                message=f"Connection timed out after {timeout} seconds.",
-                model="default-model-name",
-                llm_provider="litellm-httpx-handler",
-                headers=headers,
-            )
-        except httpx.HTTPStatusError as e:
-            setattr(e, "status_code", e.response.status_code)
-            if stream is True:
-                setattr(e, "message", await e.response.aread())
-            else:
-                setattr(e, "message", e.response.text)
-            raise e
-        except Exception as e:
-            raise e
 
     async def delete(
         self,
@@ -387,32 +259,47 @@ class AsyncHTTPHandler:
         timeout: Optional[Union[float, httpx.Timeout]] = None,
         stream: bool = False,
     ):
+        if timeout is None:
+            timeout = self.timeout
+
+        req = self.client.build_request(
+            "DELETE", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
+        )
+        return await self.send(req, stream, timeout_hint=timeout)
+        
+    async def send(self, request: httpx.Request, stream: bool = False, timeout_hint: Optional[Union[float, httpx.Timeout]] = None) -> httpx.Response:
+        """
+        Send a basic request with the client, doing standard retry 1x on connection errors and error decoration
+        """
+        start_time = time.time()
         try:
-            if timeout is None:
-                timeout = self.timeout
-            req = self.client.build_request(
-                "DELETE", url, data=data, json=json, params=params, headers=headers, timeout=timeout  # type: ignore
-            )
-            response = await self.client.send(req, stream=stream)
-            response.raise_for_status()
-            return response
+            return await self._single_connection_request(request, self.client, stream)
         except (httpx.RemoteProtocolError, httpx.ConnectError):
-            # Retry the request with a new session if there is a connection error
-            new_client = self.create_client(
-                timeout=timeout, concurrent_limit=1, event_hooks=self.event_hooks
-            )
-            try:
-                return await self.single_connection_post_request(
-                    url=url,
+            # Retry the request with a one-off client if there is a connection error
+            with self.create_client(
+                timeout=self.timeout, concurrent_limit=1, event_hooks=self.event_hooks
+            ) as new_client:
+                return await self._single_connection_request(
+                    request=request,
                     client=new_client,
-                    data=data,
-                    json=json,
-                    params=params,
-                    headers=headers,
                     stream=stream,
                 )
-            finally:
-                await new_client.aclose()
+        except httpx.TimeoutException as e:
+            headers = {}
+            error_response = getattr(e, "response", None)
+            if error_response is not None:
+                for key, value in error_response.headers.items():
+                    headers["response_headers-{}".format(key)] = value
+
+            end_time = time.time()
+            time_delta = round(end_time - start_time, 3)
+            hint_str = f" Timeout set to {timeout_hint} seconds." if timeout_hint else ""
+            raise litellm.Timeout(
+                message=f"Connection timed out.{hint_str} Clock time passed={time_delta} seconds.",
+                model="default-model-name",
+                llm_provider="litellm-httpx-handler",
+                headers=headers,
+            )
         except httpx.HTTPStatusError as e:
             setattr(e, "status_code", e.response.status_code)
             if stream is True:
@@ -420,17 +307,11 @@ class AsyncHTTPHandler:
             else:
                 setattr(e, "message", e.response.text)
             raise e
-        except Exception as e:
-            raise e
 
-    async def single_connection_post_request(
+    async def _single_connection_request(
         self,
-        url: str,
+        request: httpx.Request,
         client: httpx.AsyncClient,
-        data: Optional[Union[dict, str, bytes]] = None,  # type: ignore
-        json: Optional[dict] = None,
-        params: Optional[dict] = None,
-        headers: Optional[dict] = None,
         stream: bool = False,
     ):
         """
@@ -438,10 +319,7 @@ class AsyncHTTPHandler:
 
         Used for retrying connection client errors.
         """
-        req = client.build_request(
-            "POST", url, data=data, json=json, params=params, headers=headers  # type: ignore
-        )
-        response = await client.send(req, stream=stream)
+        response = await client.send(request, stream=stream)
         response.raise_for_status()
         return response
 
